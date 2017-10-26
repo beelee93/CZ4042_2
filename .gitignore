@@ -1,0 +1,6 @@
+data
+.vscode
+__pycache__
+figure*.png
+project2a_help.py
+eg*.py
