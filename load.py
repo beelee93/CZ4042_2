@@ -12,35 +12,28 @@ def one_hot(x,n):
 	return o_h
 
 def mnist(ntrain=60000,ntest=10000,onehot=True):
+	size = ntrain*28*28
 	data_dir = os.path.join(datasets_dir,'mnist/')
 	fd = open(os.path.join(data_dir,'train-images-idx3-ubyte'))
 	loaded = np.fromfile(file=fd,dtype=np.uint8)
-	trX = loaded[16:].reshape((60000,28*28)).astype(float)
+	trX = loaded[16:size+16].reshape((ntrain,28*28)).astype(float) / 255.0
 	del loaded
 
 	fd = open(os.path.join(data_dir,'train-labels-idx1-ubyte'))
 	loaded = np.fromfile(file=fd,dtype=np.uint8)
-	trY = loaded[8:].reshape((60000))
+	trY = loaded[8:ntrain+8].reshape((ntrain))
 	del loaded
 
+	size = ntest*28*28
 	fd = open(os.path.join(data_dir,'t10k-images-idx3-ubyte'))
 	loaded = np.fromfile(file=fd,dtype=np.uint8)
-	teX = loaded[16:].reshape((10000,28*28)).astype(float)
+	teX = loaded[16:size+16].reshape((ntest,28*28)).astype(float) / 255.0
 	del loaded
 
 	fd = open(os.path.join(data_dir,'t10k-labels-idx1-ubyte'))
 	loaded = np.fromfile(file=fd,dtype=np.uint8)
-	teY = loaded[8:].reshape((10000))
+	teY = loaded[8:ntest+8].reshape((ntest))
 	del loaded
-
-	trX /= 255.
-	teX /= 255.
-
-	trX = trX[:ntrain]
-	trY = trY[:ntrain]
-
-	teX = teX[:ntest]
-	teY = teY[:ntest]
 
 	if onehot:
 		trY = one_hot(trY, 10)
