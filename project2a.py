@@ -11,11 +11,12 @@ from theano.tensor.signal import pool
  
 np.random.seed(10)
 
+learning_rate = 0.05
 batch_size = 128
 decay_param = 1e-4
-noIters = 25
+noIters = 100
 momentum = 0.1
-part_number = 1
+part_number = 2
 debug = False
 
 def init_weights_bias4(filter_shape, d_type):
@@ -28,6 +29,10 @@ def init_weights_bias4(filter_shape, d_type):
             dtype=d_type)
     b_values = np.zeros((filter_shape[0],), dtype=d_type)
     return theano.shared(w_values,borrow=True), theano.shared(b_values, borrow=True)
+
+def init_velocity(filter_shape, d_type):
+    w_values =  np.zeros(shape=filter_shape, dtype=d_type)
+    return theano.shared(w_values, borrow=True)
 
 def init_weights_bias2(filter_shape, d_type):
     fan_in = filter_shape[1]
@@ -76,11 +81,31 @@ def create_model(X, lstWeights, lstBiases):
 
     return y
 
-def sgd(cost, params, lr=0.05, decay=0.0001):
+def sgd(cost, weights, biases, lr=0.05, decay=1e-4):
+    params = weights+biases
     grads = T.grad(cost=cost, wrt=params)
     updates = []
     for p, g in zip(params, grads):
         updates.append([p, p - (g + decay*p) * lr])
+    return updates
+
+def sgd_momentum(cost, weights, biases, velocities, 
+    lr=0.05, decay=1e-4, momentum=0.1):
+    gradW = T.grad(cost=cost, wrt=weights)
+    gradB = T.grad(cost=cost, wrt=biases)
+    updates = []
+
+    for i in range(len(gradW)):
+        updates.append(
+            (velocities[i], 
+            momentum*velocities[i]-(gradW[i] + decay*weights[i]) * lr)
+        )
+        updates.append(
+            (weights[i], weights[i]+velocities[i])
+        )
+        updates.append(
+            (biases[i],biases[i]-(gradB[i]+decay*biases[i])*lr)
+        )
     return updates
 
 def shuffle_data (samples, labels):
@@ -89,42 +114,40 @@ def shuffle_data (samples, labels):
     samples, labels = samples[idx], labels[idx]
     return samples, labels
     
-def create_weights_biases(dtype,small_weight_space=debug):
+def create_weights_biases(dtype,config):
     weights = []
     biases = []
 
-    if(small_weight_space):
-        # Conv layer 1 - 3 9x9 filters (giving 20x20 feature maps)
-        w,b = init_weights_bias4( (3, 1, 9, 9), dtype )
+    for con in config:
+        if(len(con)==2):
+            w,b = init_weights_bias2(con, dtype)
+        else:
+            w,b = init_weights_bias4(con, dtype)
         weights.append(w); biases.append(b)
-        # Max Pool 2x2 - giving 10x10 feature maps
-        # Conv layer 2 - 3 5x5 filters (giving 6x6 feature maps)
-        w,b = init_weights_bias4( (3, 3, 5, 5), dtype )
-        weights.append(w); biases.append(b)
-        # Max Pool 2x2 - giving 3x3 feature maps
-        # Fully connected layer - 27 inputs to 10 outputs
-        w,b = init_weights_bias2( (3*3*3, 10), dtype )
-        weights.append(w); biases.append(b)
-        # Softmax layer - 10 inputs to 10 outputs
-        w,b = init_weights_bias2( (10, 10), dtype )
-        weights.append(w); biases.append(b)
-    else:
-        # Conv layer 1 - 15 9x9 filters (giving 20x20 feature maps)
-        w,b = init_weights_bias4( (15, 1, 9, 9), dtype )
-        weights.append(w); biases.append(b)
-        # Max Pool 2x2 - giving 10x10 feature maps
-        # Conv layer 2 - 20 5x5 filters (giving 6x6 feature maps)
-        w,b = init_weights_bias4( (20, 15, 5, 5), dtype )
-        weights.append(w); biases.append(b)
-        # Max Pool 2x2 - giving 3x3 feature maps
-        # Fully connected layer - 180 inputs to 100 outputs
-        w,b = init_weights_bias2( (20*3*3, 100), dtype )
-        weights.append(w); biases.append(b)
-        # Softmax layer - 100 inputs to 10 outputs
-        w,b = init_weights_bias2( (100, 10), dtype )
-        weights.append(w); biases.append(b)
-
     return weights,biases
+
+def create_velocity(dtype,config):
+    velocities = []
+    for con in config:
+        v = init_velocity(con, dtype)
+        velocities.append(v)
+    return velocities
+
+# configure the network
+if debug:
+    config = (
+        (3, 1, 9, 9),
+        (3, 3, 5, 5),
+        (27, 10),
+        (10, 10)
+    )
+else:
+    config = (
+        (15, 1, 9, 9),  # 15 9x9 filters
+        (20, 15, 5, 5), # 20 5x5 filters
+        (180, 100),     # 100 neurons layer
+        (100, 10)       # 10 neurons softmax
+    )
 
 # load data
 trX, teX, trY, teY = mnist(12000,2000,onehot=True)
@@ -137,19 +160,23 @@ X = T.tensor4('X')
 Y = T.matrix('Y')
 
 # create weights and biases
-weights, biases = create_weights_biases(X.dtype)
+weights, biases = create_weights_biases(X.dtype, config)
 outputs = create_model(X, weights, biases)
+
+if part_number==2:
+    velocities = create_velocity(X.dtype, config)
 
 py_x = outputs[5]
 y_x = T.argmax(py_x, axis=1)
 cost = T.mean(T.nnet.categorical_crossentropy(py_x, Y))
 
-params = []
-for i in range(len(weights)):
-    params.append(weights[i])
-    params.append(biases[i])
-
-updates = sgd(cost, params, lr=0.05, decay=decay_param)
+if part_number==1:
+    updates = sgd(cost, weights, biases, lr=learning_rate, decay=decay_param)
+elif part_number==2:
+    updates = sgd_momentum(cost, weights, biases, velocities, lr=learning_rate, decay=decay_param, 
+        momentum=momentum)
+else:
+    raise IndexError("Part number out of bounds")
 
 train = theano.function(inputs=[X, Y], outputs=cost, updates=updates, allow_input_downcast=True)
 predict = theano.function(inputs=[X], outputs=y_x, allow_input_downcast=True)
