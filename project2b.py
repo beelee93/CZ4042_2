@@ -8,8 +8,8 @@ import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 
 corruption_level=0.1
-training_epochs = 25
-learning_rate = 0.1
+training_epochs = 25 #25
+learning_rate = 0.1 #0.1
 batch_size = 128
 with_attributes = False # use momentum, and sparsity?
 
@@ -69,8 +69,8 @@ rng = np.random.RandomState(123)
 theano_rng = RandomStreams(rng.randint(2 ** 30))
 
 # create weights and biases
-#config = [28*28, 900, 625, 400, 10]
-config = [28*28,900,10]
+config = [28*28, 900, 625, 400, 10]
+weight_image_size = [28, 30, 25]
 weights,biases,bprimes = create_network_parameters(config)
 
 encoder_layer_count = len(config)-2
@@ -137,8 +137,9 @@ for i in range(encoder_layer_count):
     w1 = weights[i+1].get_value()
     pylab.figure()
     pylab.gray()
+    sz = weight_image_size[i]
     for j in range(100):
-        pylab.subplot(10, 10, j+1); pylab.axis('off'); pylab.imshow(w1[:,j].reshape(28,28))
+        pylab.subplot(10, 10, j+1); pylab.axis('off'); pylab.imshow(w1[:,j].reshape(sz,sz))
     pylab.savefig(filename_prefix +"enc_weights_%d.png" % (i+1))
 
 """
