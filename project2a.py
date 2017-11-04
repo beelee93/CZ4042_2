@@ -7,16 +7,23 @@ from theano import tensor as T
 from theano.tensor.nnet import conv2d
 from theano.tensor.signal import pool
 
+import sys
+
 # 2 convolution layer, 2 max pooling layer, 1 hidden and a softmax layer
  
-np.random.seed(10)
-
 learning_rate = 0.05
 batch_size = 128
 decay_param = 1e-4
 noIters = 100
 momentum = 0.1
-part_number = 2
+part_number = 1
+
+if len(sys.argv)>1:
+    part_number = int(sys.argv[1])
+    print("Running script for part %d" % part_number)
+
+rms_roe = 0.9
+rms_eps = 1e-6
 debug = False
 
 def init_weights_bias4(filter_shape, d_type):
@@ -96,12 +103,33 @@ def sgd_momentum(cost, weights, biases, velocities,
     updates = []
 
     for i in range(len(gradW)):
+        temp = momentum*velocities[i]-(gradW[i] + decay*weights[i]) * lr
         updates.append(
-            (velocities[i], 
-            momentum*velocities[i]-(gradW[i] + decay*weights[i]) * lr)
+            (velocities[i], temp)
         )
         updates.append(
-            (weights[i], weights[i]+velocities[i])
+            (weights[i], weights[i]+temp)
+        )
+        updates.append(
+            (biases[i],biases[i]-(gradB[i]+decay*biases[i])*lr)
+        )
+    return updates
+
+def sgd_rms(cost, weights,biases, rmsterms,
+    roe=0.9, epsilon=1e-6,
+    lr=0.001, decay=1e-4):
+    gradW = T.grad(cost=cost, wrt=weights)
+    gradB = T.grad(cost=cost, wrt=biases)
+    updates = []
+
+    for i in range(len(gradW)):
+        temp = roe*rmsterms[i] + (1-roe)*T.sqr(gradW[i])
+        updates.append(
+            (rmsterms[i], temp)
+        )
+        temp = lr / T.sqrt(epsilon + temp)
+        updates.append(
+            (weights[i], weights[i]-temp * gradW[i])
         )
         updates.append(
             (biases[i],biases[i]-(gradB[i]+decay*biases[i])*lr)
@@ -165,6 +193,8 @@ outputs = create_model(X, weights, biases)
 
 if part_number==2:
     velocities = create_velocity(X.dtype, config)
+elif part_number==3:
+    rmsterms = create_velocity(X.dtype, config) # rmsterms have same dimensions as velocity anyway
 
 py_x = outputs[5]
 y_x = T.argmax(py_x, axis=1)
@@ -175,6 +205,9 @@ if part_number==1:
 elif part_number==2:
     updates = sgd_momentum(cost, weights, biases, velocities, lr=learning_rate, decay=decay_param, 
         momentum=momentum)
+elif part_number==3:
+    updates = sgd_rms(cost, weights,biases, rmsterms, roe=rms_roe, epsilon=rms_eps,
+            lr=0.001, decay=decay_param)
 else:
     raise IndexError("Part number out of bounds")
 
@@ -202,6 +235,8 @@ for i in range(noIters):
     c.append(cumCost)
     print('Epoch %d: Avg Cost=%.2e Accu=%3f' % (i+1,c[i],a[i]))
 
+# save accuracy list
+np.save( "accu_part%d.npy" % part_number, a)
 
 # accuracy figure
 fig = pylab.figure()
