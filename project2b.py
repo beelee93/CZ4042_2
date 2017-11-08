@@ -9,13 +9,13 @@ from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import math
 
 corruption_level=0.1
-training_epochs = 5 #25
-learning_rate = 0.6 #0.1
+training_epochs = 25 #25
+learning_rate = 0.1 #0.1
 batch_size = 128
 momentum=0.1
 penalty=0.5
 sparsity=0.05
-with_attributes = True # use momentum, and sparsity?
+with_attributes = False # use momentum, and sparsity?
 
 # 1 encoder, decoder and a softmax layer
 
@@ -210,8 +210,9 @@ for i in range(encoder_layer_count):
     pylab.plot(range(training_epochs), d)
     pylab.xlabel('iterations')
     pylab.ylabel('cross-entropy')
+    pylab.suptitle('training error of hidden layer %d' % (i+1))
     pylab.savefig(filename_prefix +"enc_train_%d.png" % (i+1))
-
+    
     # weights visualized
     w1 = weights[i+1].get_value()
     pylab.figure()
@@ -219,6 +220,7 @@ for i in range(encoder_layer_count):
     sz = weight_image_size[i]
     for j in range(100):
         pylab.subplot(10, 10, j+1); pylab.axis('off'); pylab.imshow(w1[:,j].reshape(sz,sz))
+    pylab.suptitle('visualized weights for hidden layer %d' % (i+1))
     pylab.savefig(filename_prefix +"enc_weights_%d.png" % (i+1))
 
 
@@ -261,7 +263,7 @@ for i in range(100):
         ax.imshow(oimages[j+1].reshape(weight_image_size[j+1],weight_image_size[j+1]))
 
 figInputImages.savefig(filename_prefix +"input_images.png")
-figInputImages.savefig(filename_prefix +"reconstructed_images.png")
+figOutputImages.savefig(filename_prefix +"reconstructed_images.png")
 for i in range(encoder_layer_count):
     figHiddenActivation[i].savefig(filename_prefix +"hidden_activation_%d.png" % config[i+1])
 
@@ -281,6 +283,7 @@ fig = pylab.figure()
 pylab.plot(range(training_epochs), d, color='red')
 pylab.xlabel('iterations')
 pylab.ylabel('cross-entropy', color='red')
+pylab.suptitle('training cost and test accuracy of classifier')
 
 ax = fig.axes[0].twinx()
 ax.plot(range(training_epochs), a, color='green')
