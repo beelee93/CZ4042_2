@@ -8,14 +8,23 @@ import theano.tensor as T
 from theano.sandbox.rng_mrg import MRG_RandomStreams as RandomStreams
 import math
 
+import sys
+
 corruption_level=0.1
-training_epochs = 25 #25
+training_epochs = 40 #25
 learning_rate = 0.1 #0.1
 batch_size = 128
 momentum=0.1
 penalty=0.5
 sparsity=0.05
 with_attributes = False # use momentum, and sparsity?
+
+if len(sys.argv)>1:
+    with_attributes = bool(int(sys.argv[1]))
+    if(with_attributes):
+        print("Using sparsity constraint")
+    else:
+        print("Not using sparsity constraint")
 
 # 1 encoder, decoder and a softmax layer
 
@@ -94,8 +103,8 @@ def create_encoder_trainer_sparsity(y,w,b,bp,v,layerIndex,inputX):
 
     # calculate sparsity
     dh = beta*T.shape(z1)[1]*(rho*T.log(rho) + (1-rho)*T.log(1-rho)) \
-			- beta*rho*T.sum(T.log(T.mean(z1, axis=0)+1e-6)) \
-			- beta*(1-rho)*T.sum(T.log(1-T.mean(z1, axis=0)+1e-6))
+			- beta*rho*T.sum(T.log(T.mean(z1, axis=0))) \
+			- beta*(1-rho)*T.sum(T.log(1-T.mean(z1, axis=0)))
 
     cost1 = - T.mean(T.sum(x * T.log(z1) + (1 - x) * T.log(1 - z1), axis=1)) + dh
     params1 = [w[layerIndex], b[layerIndex], bp[layerIndex]]
